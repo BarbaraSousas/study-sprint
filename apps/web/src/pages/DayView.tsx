@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { generatedApi, logsApi } from '@/lib/api';
-import type { GeneratedDay, Task, TaskCategory } from '@studysprint/shared';
+import type { GeneratedDay, Task } from '@studysprint/shared';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -21,6 +21,15 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useAutosave } from '@/hooks/use-autosave';
+import { SavingIndicator } from '@/components/ui/saving-indicator';
+
+interface FormData {
+  hoursSpent: number;
+  pipelineApplications: number;
+  pipelineMessages: number;
+  reflectionText: string;
+}
 
 export function DayView() {
   const { date } = useParams<{ date: string }>();
@@ -29,6 +38,12 @@ export function DayView() {
   const { toast } = useToast();
 
   const [showReflectionModal, setShowReflectionModal] = useState(false);
+  const [formData, setFormData] = useState<FormData>({
+    hoursSpent: 0,
+    pipelineApplications: 0,
+    pipelineMessages: 0,
+    reflectionText: '',
+  });
 
   const { data } = useQuery({
     queryKey: ['generated'],
@@ -48,6 +63,30 @@ export function DayView() {
       queryClient.invalidateQueries({ queryKey: ['log', date] });
       queryClient.invalidateQueries({ queryKey: ['logs'] });
     },
+  });
+
+  // Sync form data when log data loads
+  useEffect(() => {
+    if (logData) {
+      setFormData({
+        hoursSpent: logData.hoursSpent || 0,
+        pipelineApplications: logData.pipelineApplications || 0,
+        pipelineMessages: logData.pipelineMessages || 0,
+        reflectionText: logData.reflectionText || '',
+      });
+      syncWithServer(formData);
+    }
+  }, [logData]);
+
+  const isFinalized = !!logData?.finalizedAt;
+
+  // Autosave for form fields
+  const { status: saveStatus, syncWithServer } = useAutosave({
+    data: formData,
+    onSave: (data) => logsApi.update(date!, data),
+    enabled: !!date && !isFinalized,
+    queryKeysToInvalidate: [['generated'], ['log', date!], ['logs']],
+    debounceMs: 1000,
   });
 
   if (!data || !date) {
@@ -105,16 +144,12 @@ export function DayView() {
     }
   };
 
-  const handleInputChange = async (field: string, value: number | string) => {
-    try {
-      await updateLogMutation.mutateAsync({ [field]: value });
-    } catch {
-      toast({ title: 'Failed to save', variant: 'destructive' });
-    }
+  const handleFieldChange = (field: keyof FormData, value: number | string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleFinalize = () => {
-    if (!log.reflectionText || log.reflectionText.trim() === '') {
+    if (!formData.reflectionText || formData.reflectionText.trim() === '') {
       setShowReflectionModal(true);
       return;
     }
@@ -125,6 +160,7 @@ export function DayView() {
   const finalizeDay = async () => {
     try {
       await updateLogMutation.mutateAsync({
+        ...formData,
         finalizedAt: new Date().toISOString(),
       });
       toast({ title: 'Day finalized successfully!' });
@@ -133,8 +169,6 @@ export function DayView() {
       toast({ title: 'Failed to finalize', variant: 'destructive' });
     }
   };
-
-  const isFinalized = !!log.finalizedAt;
 
   return (
     <div className="space-y-6">
@@ -251,8 +285,9 @@ export function DayView() {
         <div className="space-y-4">
           {/* Time & Pipeline */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg">Track Your Day</CardTitle>
+              <SavingIndicator status={saveStatus} />
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -263,9 +298,9 @@ export function DayView() {
                   min="0"
                   max="24"
                   step="0.5"
-                  value={log.hoursSpent}
+                  value={formData.hoursSpent}
                   disabled={isFinalized}
-                  onChange={(e) => handleInputChange('hoursSpent', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleFieldChange('hoursSpent', parseFloat(e.target.value) || 0)}
                 />
               </div>
               <div>
@@ -274,10 +309,10 @@ export function DayView() {
                   id="applications"
                   type="number"
                   min="0"
-                  value={log.pipelineApplications}
+                  value={formData.pipelineApplications}
                   disabled={isFinalized}
                   onChange={(e) =>
-                    handleInputChange('pipelineApplications', parseInt(e.target.value) || 0)
+                    handleFieldChange('pipelineApplications', parseInt(e.target.value) || 0)
                   }
                 />
               </div>
@@ -287,10 +322,10 @@ export function DayView() {
                   id="messages"
                   type="number"
                   min="0"
-                  value={log.pipelineMessages}
+                  value={formData.pipelineMessages}
                   disabled={isFinalized}
                   onChange={(e) =>
-                    handleInputChange('pipelineMessages', parseInt(e.target.value) || 0)
+                    handleFieldChange('pipelineMessages', parseInt(e.target.value) || 0)
                   }
                 />
               </div>
@@ -308,9 +343,9 @@ export function DayView() {
             <CardContent className="space-y-4">
               <Textarea
                 placeholder="Write your thoughts and learnings..."
-                value={log.reflectionText}
+                value={formData.reflectionText}
                 disabled={isFinalized}
-                onChange={(e) => handleInputChange('reflectionText', e.target.value)}
+                onChange={(e) => handleFieldChange('reflectionText', e.target.value)}
                 rows={5}
               />
             </CardContent>
@@ -349,8 +384,8 @@ export function DayView() {
           </DialogHeader>
           <Textarea
             placeholder="What did you learn today?"
-            value={log.reflectionText}
-            onChange={(e) => handleInputChange('reflectionText', e.target.value)}
+            value={formData.reflectionText}
+            onChange={(e) => handleFieldChange('reflectionText', e.target.value)}
             rows={4}
           />
           <DialogFooter>
@@ -359,7 +394,7 @@ export function DayView() {
             </Button>
             <Button
               onClick={finalizeDay}
-              disabled={!log.reflectionText || log.reflectionText.trim() === ''}
+              disabled={!formData.reflectionText || formData.reflectionText.trim() === ''}
             >
               Save & Finalize
             </Button>

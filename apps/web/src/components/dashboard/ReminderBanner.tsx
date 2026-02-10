@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Bell, X } from 'lucide-react';
 import { generatedApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { getNotificationPermission, showNotification } from '@/lib/notifications';
 
 export function ReminderBanner() {
   const [dismissed, setDismissed] = useState(false);
@@ -29,6 +30,20 @@ export function ReminderBanner() {
         const todayDay = data.days?.find((d: any) => d.date === data.today);
         if (todayDay && todayDay.status !== 'done') {
           setShowReminder(true);
+
+          // Send browser notification if permitted
+          if (getNotificationPermission() === 'granted') {
+            const lastNotified = sessionStorage.getItem('lastReminderNotification');
+            const todayKey = data.today;
+
+            if (lastNotified !== todayKey) {
+              showNotification('StudySprint Reminder', {
+                body: `Don't forget to complete today's study tasks! ${todayDay.progress.completedTasks}/${todayDay.progress.totalTasks} done.`,
+                tag: 'daily-reminder',
+              });
+              sessionStorage.setItem('lastReminderNotification', todayKey);
+            }
+          }
         }
       }
     };

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, Upload, RefreshCw, Bell } from 'lucide-react';
+import { Download, Upload, RefreshCw, Bell, CheckCircle2 } from 'lucide-react';
 import { settingsApi, exportApi } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import {
+  getNotificationPermission,
+  requestNotificationPermission as requestPermission,
+  showNotification,
+} from '@/lib/notifications';
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -105,18 +110,16 @@ export function SettingsPage() {
     }
   };
 
-  const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      toast({ title: 'Browser notifications not supported', variant: 'destructive' });
-      return;
-    }
+  const [notificationStatus, setNotificationStatus] = useState(getNotificationPermission());
 
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
+  const handleEnableNotifications = async () => {
+    const granted = await requestPermission();
+    setNotificationStatus(getNotificationPermission());
+
+    if (granted) {
       toast({ title: 'Notifications enabled' });
-      new Notification('StudySprint', {
+      showNotification('StudySprint', {
         body: 'Notifications are now enabled!',
-        icon: '/favicon.svg',
       });
     } else {
       toast({ title: 'Permission denied', variant: 'destructive' });
@@ -255,14 +258,32 @@ export function SettingsPage() {
             Enable browser notifications for reminders
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button variant="outline" onClick={requestNotificationPermission}>
-            <Bell className="h-4 w-4 mr-2" />
-            Enable Browser Notifications
-          </Button>
-          <p className="text-sm text-muted-foreground mt-2">
-            Note: Browser notifications only work when the app is open. For more reliable
-            reminders, consider using a calendar app.
+        <CardContent className="space-y-3">
+          {notificationStatus === 'unsupported' ? (
+            <p className="text-sm text-muted-foreground">
+              Your browser does not support notifications.
+            </p>
+          ) : notificationStatus === 'granted' ? (
+            <div className="flex items-center gap-2 text-green-500">
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="font-medium">Notifications enabled</span>
+            </div>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleEnableNotifications}>
+                <Bell className="h-4 w-4 mr-2" />
+                Enable Browser Notifications
+              </Button>
+              {notificationStatus === 'denied' && (
+                <p className="text-sm text-destructive">
+                  Notifications are blocked. Please enable them in your browser settings.
+                </p>
+              )}
+            </>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Notifications work best when the app is installed as a PWA. Click the install
+            button in your browser's address bar to install StudySprint.
           </p>
         </CardContent>
       </Card>
