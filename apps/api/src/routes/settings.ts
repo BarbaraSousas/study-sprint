@@ -8,12 +8,19 @@ export async function settingsRoutes(fastify: FastifyInstance) {
   fastify.get('/settings', async (request, reply) => {
     const { userId } = getCurrentUser();
 
-    const settings = await prisma.settings.findUnique({
+    let settings = await prisma.settings.findUnique({
       where: { userId },
     });
 
     if (!settings) {
-      return reply.status(404).send({ error: 'Settings not found' });
+      // Create default settings if not exists
+      settings = await prisma.settings.create({
+        data: {
+          userId,
+          timezone: 'America/Sao_Paulo',
+          reminderTime: '09:00',
+        },
+      });
     }
 
     return settings;
@@ -28,9 +35,14 @@ export async function settingsRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Validation failed', details: result.error.issues });
     }
 
-    const settings = await prisma.settings.update({
+    const settings = await prisma.settings.upsert({
       where: { userId },
-      data: result.data,
+      update: result.data,
+      create: {
+        userId,
+        timezone: result.data.timezone || 'America/Sao_Paulo',
+        reminderTime: result.data.reminderTime || '09:00',
+      },
     });
 
     return settings;

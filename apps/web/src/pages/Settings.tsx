@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, Upload, RefreshCw, Bell, CheckCircle2 } from 'lucide-react';
+import { Download, RefreshCw, Bell, CheckCircle2 } from 'lucide-react';
 import { settingsApi, exportApi } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { SkeletonForm } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import {
   getNotificationPermission,
@@ -26,11 +27,8 @@ import {
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showImportConfirm, setShowImportConfirm] = useState(false);
-  const [importData, setImportData] = useState<any>(null);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -41,8 +39,7 @@ export function SettingsPage() {
     mutationFn: settingsApi.update,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
-      queryClient.invalidateQueries({ queryKey: ['generated'] });
-      toast({ title: 'Settings saved' });
+      toast({ title: 'Configuracoes salvas' });
     },
   });
 
@@ -58,20 +55,7 @@ export function SettingsPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast({ title: 'Export downloaded' });
-    },
-  });
-
-  const importMutation = useMutation({
-    mutationFn: exportApi.import,
-    onSuccess: () => {
-      queryClient.invalidateQueries();
-      setShowImportConfirm(false);
-      setImportData(null);
-      toast({ title: 'Import completed successfully' });
-    },
-    onError: () => {
-      toast({ title: 'Import failed', variant: 'destructive' });
+      toast({ title: 'Exportacao baixada' });
     },
   });
 
@@ -80,34 +64,12 @@ export function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries();
       setShowResetConfirm(false);
-      toast({ title: 'Data reset successfully. Run db:seed to restore sample data.' });
+      toast({ title: 'Dados resetados com sucesso' });
     },
   });
 
-  const handleSettingChange = (field: string, value: string | number) => {
+  const handleSettingChange = (field: string, value: string) => {
     updateSettingsMutation.mutate({ [field]: value });
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string);
-        setImportData(data);
-        setShowImportConfirm(true);
-      } catch {
-        toast({ title: 'Invalid file format', variant: 'destructive' });
-      }
-    };
-    reader.readAsText(file);
-
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   };
 
   const [notificationStatus, setNotificationStatus] = useState(getNotificationPermission());
@@ -117,56 +79,39 @@ export function SettingsPage() {
     setNotificationStatus(getNotificationPermission());
 
     if (granted) {
-      toast({ title: 'Notifications enabled' });
+      toast({ title: 'Notificacoes habilitadas' });
       showNotification('StudySprint', {
-        body: 'Notifications are now enabled!',
+        body: 'Notificacoes ativadas!',
       });
     } else {
-      toast({ title: 'Permission denied', variant: 'destructive' });
+      toast({ title: 'Permissao negada', variant: 'destructive' });
     }
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
+    return <SkeletonForm />;
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-2xl animate-stagger">
       <div>
-        <h1 className="text-3xl font-bold">Settings</h1>
+        <h1 className="text-3xl font-bold">Configuracoes</h1>
         <p className="text-muted-foreground">
-          Configure your study plan and preferences
+          Configure suas preferencias
         </p>
       </div>
 
-      {/* Plan Settings */}
+      {/* General Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>Plan Settings</CardTitle>
+          <CardTitle>Configuracoes Gerais</CardTitle>
           <CardDescription>
-            Configure when your plan starts and your daily reminder time
+            Configure seu fuso horario e horario de lembrete
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="startDate">Start Date</Label>
-            <Input
-              id="startDate"
-              type="date"
-              value={settings?.startDate || ''}
-              onChange={(e) => handleSettingChange('startDate', e.target.value)}
-            />
-            <p className="text-sm text-muted-foreground mt-1">
-              Day 1 of your plan starts on this date
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="reminderTime">Daily Reminder Time</Label>
+            <Label htmlFor="reminderTime">Horario do Lembrete Diario</Label>
             <Input
               id="reminderTime"
               type="time"
@@ -176,7 +121,7 @@ export function SettingsPage() {
           </div>
 
           <div>
-            <Label htmlFor="timezone">Timezone</Label>
+            <Label htmlFor="timezone">Fuso Horario</Label>
             <Input
               id="timezone"
               value={settings?.timezone || ''}
@@ -186,114 +131,46 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Weekly Goals */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Weekly Goals</CardTitle>
-          <CardDescription>
-            Set your pipeline targets for the week
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="weeklyApplications">Weekly Applications Goal</Label>
-            <Input
-              id="weeklyApplications"
-              type="number"
-              min="0"
-              value={settings?.weeklyGoalApplications || 0}
-              onChange={(e) =>
-                handleSettingChange('weeklyGoalApplications', parseInt(e.target.value) || 0)
-              }
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="weeklyMessages">Weekly Messages Goal</Label>
-            <Input
-              id="weeklyMessages"
-              type="number"
-              min="0"
-              value={settings?.weeklyGoalMessages || 0}
-              onChange={(e) =>
-                handleSettingChange('weeklyGoalMessages', parseInt(e.target.value) || 0)
-              }
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Streak Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Streak Settings</CardTitle>
-          <CardDescription>
-            Configure how streaks are calculated
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div>
-            <Label htmlFor="streakMinTasks">Minimum Tasks per Day</Label>
-            <Input
-              id="streakMinTasks"
-              type="number"
-              min="1"
-              value={settings?.streakRuleMinTasks || 1}
-              onChange={(e) =>
-                handleSettingChange('streakRuleMinTasks', parseInt(e.target.value) || 1)
-              }
-            />
-            <p className="text-sm text-muted-foreground mt-1">
-              Complete at least this many tasks to maintain your streak
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Notifications */}
       <Card>
         <CardHeader>
-          <CardTitle>Notifications</CardTitle>
+          <CardTitle>Notificacoes</CardTitle>
           <CardDescription>
-            Enable browser notifications for reminders
+            Habilite notificacoes do navegador para lembretes
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {notificationStatus === 'unsupported' ? (
             <p className="text-sm text-muted-foreground">
-              Your browser does not support notifications.
+              Seu navegador nao suporta notificacoes.
             </p>
           ) : notificationStatus === 'granted' ? (
             <div className="flex items-center gap-2 text-green-500">
               <CheckCircle2 className="h-4 w-4" />
-              <span className="font-medium">Notifications enabled</span>
+              <span className="font-medium">Notificacoes habilitadas</span>
             </div>
           ) : (
             <>
               <Button variant="outline" onClick={handleEnableNotifications}>
                 <Bell className="h-4 w-4 mr-2" />
-                Enable Browser Notifications
+                Habilitar Notificacoes
               </Button>
               {notificationStatus === 'denied' && (
                 <p className="text-sm text-destructive">
-                  Notifications are blocked. Please enable them in your browser settings.
+                  Notificacoes bloqueadas. Habilite nas configuracoes do navegador.
                 </p>
               )}
             </>
           )}
-          <p className="text-sm text-muted-foreground">
-            Notifications work best when the app is installed as a PWA. Click the install
-            button in your browser's address bar to install StudySprint.
-          </p>
         </CardContent>
       </Card>
 
-      {/* Export / Import */}
+      {/* Data Management */}
       <Card>
         <CardHeader>
-          <CardTitle>Data Management</CardTitle>
+          <CardTitle>Gerenciamento de Dados</CardTitle>
           <CardDescription>
-            Export, import, or reset your data
+            Exporte ou resete seus dados
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -304,85 +181,42 @@ export function SettingsPage() {
               disabled={exportMutation.isPending}
             >
               <Download className="h-4 w-4 mr-2" />
-              Export Data
+              Exportar Dados
             </Button>
-
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-2" />
-              Import Data
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
 
             <Button
               variant="destructive"
               onClick={() => setShowResetConfirm(true)}
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Reset All Data
+              Resetar Tudo
             </Button>
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Export creates a JSON file with all your settings, plan, and logs.
-            Import will replace all existing data.
+            Exportar cria um arquivo JSON com todos os seus sprints e configuracoes.
           </p>
         </CardContent>
       </Card>
-
-      {/* Import Confirmation */}
-      <AlertDialog open={showImportConfirm} onOpenChange={setShowImportConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Import Data?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will replace all your current data with the imported data. This action
-              cannot be undone.
-              {importData && (
-                <div className="mt-2 p-2 bg-muted rounded text-sm">
-                  <p>Plan: {importData.plan?.name}</p>
-                  <p>Days: {importData.days?.length}</p>
-                  <p>Tasks: {importData.tasks?.length}</p>
-                  <p>Logs: {importData.logs?.length}</p>
-                </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => importMutation.mutate(importData)}
-              disabled={importMutation.isPending}
-            >
-              Import
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Reset Confirmation */}
       <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset All Data?</AlertDialogTitle>
+            <AlertDialogTitle>Resetar Todos os Dados?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete all your plans, progress, and logs. Your settings will be
-              reset to defaults. This action cannot be undone.
+              Isso vai deletar todos os seus sprints e progresso. Suas configuracoes
+              serao resetadas. Esta acao nao pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => resetMutation.mutate()}
               disabled={resetMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Reset Everything
+              Resetar Tudo
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

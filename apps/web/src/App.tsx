@@ -1,49 +1,26 @@
-import { useState, useEffect } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Map,
-  Settings,
-  Edit3,
-  Moon,
-  Sun,
-  Search,
-} from 'lucide-react';
+import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Home as HomeIcon, Plus, Settings, Moon, Sun } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
-import { ReminderBanner } from '@/components/dashboard/ReminderBanner';
-import { Dashboard } from '@/pages/Dashboard';
-import { MapView } from '@/pages/MapView';
-import { DayView } from '@/pages/DayView';
-import { PlanEditor } from '@/pages/PlanEditor';
+import { Home } from '@/pages/Home';
+import { SprintView } from '@/pages/SprintView';
+import { DayStudy } from '@/pages/DayStudy';
+import { QuizView } from '@/pages/QuizView';
+import { CreateSprint } from '@/pages/CreateSprint';
 import { SettingsPage } from '@/pages/Settings';
 import { Button } from '@/components/ui/button';
-import { SearchDialog } from '@/components/search/SearchDialog';
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
 
 function App() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [searchOpen, setSearchOpen] = useState(false);
-
-  // Keyboard shortcut for search (Cmd+K or Ctrl+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setSearchOpen(true);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-background">
-      <ReminderBanner />
-
-      {/* Navigation */}
-      <nav className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-        <div className="container flex h-14 p-8 items-center">
+      {/* Navigation - Desktop */}
+      <nav className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b hidden md:block">
+        <div className="container flex h-14 px-8 items-center">
           <div className="mr-8 flex items-center space-x-2">
             <span className="text-xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
               StudySprint
@@ -51,30 +28,24 @@ function App() {
           </div>
 
           <div className="flex items-center space-x-6">
-            <NavItem to="/" icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" />
-            <NavItem to="/map" icon={<Map className="h-4 w-4" />} label="Map" />
-            <NavItem to="/editor" icon={<Edit3 className="h-4 w-4" />} label="Editor" />
-            <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Settings" />
+            <NavItem to="/" icon={<HomeIcon className="h-4 w-4" />} label="Meus Sprints" />
+            <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="Configuracoes" />
           </div>
 
           <div className="ml-auto flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="default"
               size="sm"
-              className="w-40 justify-start text-muted-foreground"
-              onClick={() => setSearchOpen(true)}
+              onClick={() => navigate('/create')}
             >
-              <Search className="h-4 w-4 mr-2" />
-              <span>Search...</span>
-              <kbd className="ml-auto pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
-                <span className="text-xs">⌘</span>K
-              </kbd>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Sprint
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={resolvedTheme === 'dark' ? 'Modo claro' : 'Modo escuro'}
             >
               {resolvedTheme === 'dark' ? (
                 <Sun className="h-4 w-4" />
@@ -86,18 +57,63 @@ function App() {
         </div>
       </nav>
 
+      {/* Mobile Header */}
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b md:hidden">
+        <div className="flex h-14 items-center justify-between px-4">
+          <span className="text-lg font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+            StudySprint
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="touch-target"
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+          >
+            {resolvedTheme === 'dark' ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
+          </Button>
+        </div>
+      </header>
+
       {/* Main content */}
-      <main className="container py-6 px-8">
+      <main className="container py-6 px-4 md:px-8 pb-24 md:pb-6">
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/map" element={<MapView />} />
-          <Route path="/day/:date" element={<DayView />} />
-          <Route path="/editor" element={<PlanEditor />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/sprint/:id" element={<SprintView />} />
+          <Route path="/sprint/:id/day/:dayNumber" element={<DayStudy />} />
+          <Route path="/sprint/:id/day/:dayNumber/quiz" element={<QuizView />} />
+          <Route path="/create" element={<CreateSprint />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
 
-      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      {/* Bottom Navigation - Mobile */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t md:hidden safe-area-inset-bottom">
+        <div className="flex items-center justify-around h-16 px-4">
+          <BottomNavItem
+            to="/"
+            icon={<HomeIcon className="h-5 w-5" />}
+            label="Home"
+            active={location.pathname === '/'}
+          />
+          <button
+            onClick={() => navigate('/create')}
+            className="flex flex-col items-center justify-center h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg -mt-4"
+          >
+            <Plus className="h-6 w-6" />
+          </button>
+          <BottomNavItem
+            to="/settings"
+            icon={<Settings className="h-5 w-5" />}
+            label="Config"
+            active={location.pathname === '/settings'}
+          />
+        </div>
+      </nav>
+
       <Toaster />
     </div>
   );
@@ -117,6 +133,32 @@ function NavItem({ to, icon, label }: { to: string; icon: React.ReactNode; label
       {icon}
       <span>{label}</span>
     </NavLink>
+  );
+}
+
+function BottomNavItem({
+  to,
+  icon,
+  label,
+  active,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+}) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate(to)}
+      className={cn(
+        'flex flex-col items-center justify-center gap-1 min-w-[64px] py-2',
+        active ? 'text-primary' : 'text-muted-foreground'
+      )}
+    >
+      {icon}
+      <span className="text-xs">{label}</span>
+    </button>
   );
 }
 
