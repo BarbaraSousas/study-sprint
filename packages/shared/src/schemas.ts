@@ -31,6 +31,32 @@ export const sprintResourceSchema = z.object({
   url: z.string().url(),
 });
 
+// ============================================
+// YouTube/Video Schemas
+// ============================================
+
+export const youtubeVideoSchema = z.object({
+  videoId: z.string().min(1),
+  title: z.string().min(1).max(500),
+  channel: z.string().min(1).max(200),
+  thumbnail: z.string().url(),
+  duration: z.string(),
+  durationSeconds: z.number().int().min(0),
+  views: z.string(),
+});
+
+export const enhancedResourceSchema = z.object({
+  type: z.enum(['link', 'youtube']),
+  title: z.string().min(1).max(500),
+  url: z.string().url(),
+  youtube: youtubeVideoSchema.optional(),
+});
+
+export const videoSearchTermSchema = z.object({
+  query: z.string().min(1).max(200),
+  maxResults: z.number().int().min(1).max(10).optional(),
+});
+
 export const quizQuestionSchema = z.object({
   question: z.string().min(1).max(500),
   options: z.array(z.string().min(1).max(200)).min(2).max(6),
@@ -46,6 +72,7 @@ export const generatedDaySchema = z.object({
     minutes: z.number().int().min(1).max(480),
   })).min(1).max(10),
   resources: z.array(sprintResourceSchema).max(10),
+  videoSearchTerms: z.array(videoSearchTermSchema).max(5).optional(),
   quizQuestions: z.array(quizQuestionSchema).min(1).max(5),
 });
 

@@ -17,12 +17,22 @@ interface SprintWithDaysResponse extends Sprint {
 const API_BASE = '/api';
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {};
+
+  // Only set Content-Type for requests with a body
+  if (options?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  // Merge any additional headers
+  if (options?.headers) {
+    const optHeaders = options.headers as Record<string, string>;
+    Object.assign(headers, optHeaders);
+  }
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
     ...options,
+    headers,
   });
 
   if (!response.ok) {

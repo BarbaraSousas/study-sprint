@@ -88,17 +88,28 @@ export async function sprintsRoutes(fastify: FastifyInstance) {
     const { userId } = getCurrentUser();
     const { id } = request.params as { id: string };
 
-    const sprint = await prisma.sprint.findFirst({
-      where: { id, userId },
-    });
+    console.log('[DELETE /sprints/:id] Attempting to delete sprint:', id);
 
-    if (!sprint) {
-      return reply.status(404).send({ error: 'Sprint not found' });
+    try {
+      const sprint = await prisma.sprint.findFirst({
+        where: { id, userId },
+      });
+
+      if (!sprint) {
+        console.log('[DELETE /sprints/:id] Sprint not found:', id);
+        return reply.status(404).send({ error: 'Sprint not found' });
+      }
+
+      console.log('[DELETE /sprints/:id] Found sprint:', sprint.name);
+
+      await prisma.sprint.delete({ where: { id } });
+
+      console.log('[DELETE /sprints/:id] Successfully deleted sprint:', id);
+      return { success: true };
+    } catch (error) {
+      console.error('[DELETE /sprints/:id] Error deleting sprint:', error);
+      return reply.status(500).send({ error: 'Failed to delete sprint' });
     }
-
-    await prisma.sprint.delete({ where: { id } });
-
-    return { success: true };
   });
 
   // GET /sprints/:id/days/:dayNumber - Get day details

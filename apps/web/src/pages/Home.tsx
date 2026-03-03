@@ -14,7 +14,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { sprintsApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -32,7 +31,8 @@ interface SprintSummary {
 export function Home() {
   const [sprints, setSprints] = useState<SprintSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SprintSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -55,19 +55,26 @@ export function Home() {
     }
   }
 
-  async function handleDelete(id: string) {
-    setDeleting(id);
+  async function handleDelete() {
+    if (!deleteTarget) return;
+
+    console.log('[handleDelete] Deleting sprint:', deleteTarget.id);
+    setDeleting(true);
     try {
-      await sprintsApi.delete(id);
-      setSprints(sprints.filter(s => s.id !== id));
+      await sprintsApi.delete(deleteTarget.id);
+      console.log('[handleDelete] Successfully deleted sprint:', deleteTarget.id);
+      setSprints(sprints.filter(s => s.id !== deleteTarget.id));
       toast({ title: 'Sprint deletado com sucesso' });
+      setDeleteTarget(null);
     } catch (error) {
+      console.error('[handleDelete] Error deleting sprint:', error);
       toast({
         title: 'Erro ao deletar sprint',
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
         variant: 'destructive',
       });
     } finally {
-      setDeleting(null);
+      setDeleting(false);
     }
   }
 
@@ -130,36 +137,18 @@ export function Home() {
                     </p>
                     <Progress value={sprint.progressPercent} className="h-2" />
                   </Link>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="ml-4"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Deletar Sprint</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Tem certeza que deseja deletar "{sprint.name}"? Esta acao nao pode ser desfeita.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDelete(sprint.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          disabled={deleting === sprint.id}
-                        >
-                          {deleting === sprint.id ? 'Deletando...' : 'Deletar'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="ml-4"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setDeleteTarget(sprint);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -177,6 +166,28 @@ export function Home() {
           </Card>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deletar Sprint</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja deletar "{deleteTarget?.name}"? Esta acao nao pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+            >
+              {deleting ? 'Deletando...' : 'Deletar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

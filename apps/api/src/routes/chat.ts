@@ -2,7 +2,9 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../services/db.js';
 import { getCurrentUser } from '../middleware/auth.js';
 import { chatStartSchema, chatMessageSchema, createSprintFromChatSchema } from '@studysprint/shared';
+import type { EnhancedResource, VideoSearchTerm, YouTubeVideo } from '@studysprint/shared';
 import Groq from 'groq-sdk';
+import { youtubeService } from '../services/youtube.js';
 
 const apiKey = process.env.GROQ_API_KEY;
 const groq = apiKey ? new Groq({ apiKey }) : null;
@@ -65,6 +67,9 @@ IMPORTANTE: O JSON DEVE ser um objeto valido com a estrutura EXATA abaixo. O cam
       "resources": [
         {"title": "Nome do recurso", "url": "https://exemplo.com"}
       ],
+      "videoSearchTerms": [
+        {"query": "React tutorial for beginners 2024", "maxResults": 2}
+      ],
       "quizQuestions": [
         {
           "question": "Pergunta de revisao?",
@@ -78,13 +83,14 @@ IMPORTANTE: O JSON DEVE ser um objeto valido com a estrutura EXATA abaixo. O cam
 
 REGRAS CRITICAS DO JSON:
 - "days" DEVE ser uma LISTA/ARRAY com colchetes [], NAO um objeto com chaves {}
-- Cada item em "days" deve ter: dayNumber (numero), title (string), description (string), tasks (array), resources (array), quizQuestions (array)
+- Cada item em "days" deve ter: dayNumber (numero), title (string), description (string), tasks (array), resources (array), videoSearchTerms (array), quizQuestions (array)
 - NAO retorne o JSON parcial ou quebrado
 - NAO adicione texto antes ou depois do JSON
 
 Conteudo do plano:
 - Cada dia deve ter 2-4 tarefas praticas
-- Cada dia deve ter 1-3 recursos (links reais: YouTube, LeetCode, documentacao oficial, artigos)
+- Cada dia deve ter 1-3 recursos (links para documentacao oficial, artigos, etc.)
+- Cada dia DEVE ter 1-2 videoSearchTerms com queries em ingles para buscar videos no YouTube (ex: "React hooks tutorial", "JavaScript promises explained"). Use queries especificas e relevantes para o topico do dia.
 - Cada dia deve ter 2-3 perguntas de quiz para fixacao
 - O tempo total das tarefas deve respeitar o tempo disponivel do usuario
 - Para entrevistas: inclua mock interviews, problemas reais de empresas, e revisao de conceitos fundamentais`;
@@ -95,13 +101,20 @@ interface ExtractResult {
 }
 
 function extractJsonFromResponse(text: string): ExtractResult {
+  // Log for debugging
+  console.log('[extractJsonFromResponse] Input length:', text.length);
+
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
+    console.log('[extractJsonFromResponse] No JSON found in response');
     return { plan: null, error: null };
   }
 
+  console.log('[extractJsonFromResponse] JSON match found, length:', jsonMatch[0].length);
+
   try {
     const parsed = JSON.parse(jsonMatch[0]);
+    console.log('[extractJsonFromResponse] JSON parsed successfully, name:', parsed.name);
 
     // Validate required fields
     if (!parsed.name) {
@@ -171,6 +184,74 @@ function generatePlanSummary(plan: any): string {
   return summary;
 }
 
+// Enrich plan with YouTube videos using AgentQL
+async function enrichPlanWithVideos(plan: any): Promise<any> {
+  if (!youtubeService.isAvailable()) {
+    console.log('[enrichPlanWithVideos] YouTube service not available, skipping enrichment');
+    return plan;
+  }
+
+  const enrichedDays = await Promise.all(
+    plan.days.map(async (day: any) => {
+      const videoSearchTerms: VideoSearchTerm[] = day.videoSearchTerms || [];
+
+      if (videoSearchTerms.length === 0) {
+        // Convert existing resources to EnhancedResource format
+        const enhancedResources: EnhancedResource[] = (day.resources || []).map((r: any) => ({
+          type: 'link' as const,
+          title: r.title,
+          url: r.url,
+        }));
+        return { ...day, resources: enhancedResources };
+      }
+
+      try {
+        const videoResults = await youtubeService.searchMultiple(videoSearchTerms);
+
+        // Build enhanced resources: existing links + YouTube videos
+        const enhancedResources: EnhancedResource[] = [];
+
+        // Add existing resources as links
+        for (const resource of (day.resources || [])) {
+          enhancedResources.push({
+            type: 'link',
+            title: resource.title,
+            url: resource.url,
+          });
+        }
+
+        // Add YouTube videos
+        for (const [, videos] of videoResults) {
+          for (const video of videos) {
+            // Skip fallback results (empty videoId)
+            if (!video.videoId) continue;
+
+            enhancedResources.push({
+              type: 'youtube',
+              title: video.title,
+              url: `https://www.youtube.com/watch?v=${video.videoId}`,
+              youtube: video,
+            });
+          }
+        }
+
+        return { ...day, resources: enhancedResources };
+      } catch (error) {
+        console.error(`[enrichPlanWithVideos] Error enriching day ${day.dayNumber}:`, error);
+        // On error, just convert existing resources to enhanced format
+        const enhancedResources: EnhancedResource[] = (day.resources || []).map((r: any) => ({
+          type: 'link' as const,
+          title: r.title,
+          url: r.url,
+        }));
+        return { ...day, resources: enhancedResources };
+      }
+    })
+  );
+
+  return { ...plan, days: enrichedDays };
+}
+
 export async function chatRoutes(fastify: FastifyInstance) {
   // POST /chat/start - Start a new conversation
   fastify.post('/chat/start', async (request, reply) => {
@@ -196,7 +277,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
 
     const response = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      max_tokens: 2048,
+      max_tokens: 8192,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userMessage }
@@ -217,7 +298,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
 
       const fixResponse = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...conversation.messages.map(m => ({
@@ -256,8 +337,10 @@ export async function chatRoutes(fastify: FastifyInstance) {
     }
 
     if (plan) {
+      console.log('[chat/start] Plan detected! Name:', plan.name, 'Days:', plan.days?.length);
       conversation.pendingPlan = plan;
       const summary = generatePlanSummary(plan);
+      console.log('[chat/start] Summary generated, returning planReady: true');
 
       await prisma.chatMessage.createMany({
         data: [
@@ -277,6 +360,8 @@ export async function chatRoutes(fastify: FastifyInstance) {
         },
       };
     }
+
+    console.log('[chat/start] No plan detected, continuing conversation');
 
     await prisma.chatMessage.createMany({
       data: [
@@ -317,7 +402,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
 
     const response = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...conversation.messages.map(m => ({
@@ -340,7 +425,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
 
       const fixResponse = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...conversation.messages.map(m => ({
@@ -379,8 +464,10 @@ export async function chatRoutes(fastify: FastifyInstance) {
     }
 
     if (plan) {
+      console.log('[chat/message] Plan detected! Name:', plan.name, 'Days:', plan.days?.length);
       conversation.pendingPlan = plan;
       const summary = generatePlanSummary(plan);
+      console.log('[chat/message] Summary generated, returning planReady: true');
 
       await prisma.chatMessage.createMany({
         data: [
@@ -400,6 +487,8 @@ export async function chatRoutes(fastify: FastifyInstance) {
         },
       };
     }
+
+    console.log('[chat/message] No plan detected, continuing conversation');
 
     await prisma.chatMessage.createMany({
       data: [
@@ -437,14 +526,17 @@ export async function chatRoutes(fastify: FastifyInstance) {
     const plan = conversation.pendingPlan;
     const objective = conversation.messages[0]?.content || plan.name;
 
+    // Enrich plan with YouTube videos before saving
+    const enrichedPlan = await enrichPlanWithVideos(plan);
+
     const sprint = await prisma.sprint.create({
       data: {
         userId,
-        name: plan.name,
+        name: enrichedPlan.name,
         objective,
-        totalDays: plan.totalDays || plan.days.length,
+        totalDays: enrichedPlan.totalDays || enrichedPlan.days.length,
         days: {
-          create: plan.days.map((day: any) => ({
+          create: enrichedPlan.days.map((day: any) => ({
             dayNumber: day.dayNumber,
             title: day.title,
             description: day.description || '',

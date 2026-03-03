@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Bot, User, Sparkles, Loader2, CheckCircle, Calendar } from 'lucide-react';
+import { ArrowLeft, Send, Bot, User, Sparkles, Loader2, CheckCircle, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,6 +29,7 @@ export function CreateSprint() {
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [showAllDays, setShowAllDays] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -158,40 +159,42 @@ export function CreateSprint() {
           <div
             key={index}
             className={cn(
-              'flex gap-3',
-              message.role === 'user' ? 'justify-end' : 'justify-start'
+              'flex gap-2 items-start',
+              message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
             )}
           >
-            {message.role === 'assistant' && (
-              <div className="rounded-full bg-primary/10 p-2 h-8 w-8 flex-shrink-0">
-                <Bot className="h-4 w-4 text-primary" />
-              </div>
-            )}
-            <Card className={cn(
-              'max-w-[80%]',
-              message.role === 'user' ? 'bg-primary text-primary-foreground' : ''
+            <div className={cn(
+              'rounded-full p-2 h-8 w-8 flex-shrink-0 flex items-center justify-center',
+              message.role === 'assistant' ? 'bg-primary/10' : 'bg-muted'
             )}>
-              <CardContent className="p-3 whitespace-pre-wrap">
+              {message.role === 'assistant' ? (
+                <Bot className="h-4 w-4 text-primary" />
+              ) : (
+                <User className="h-4 w-4" />
+              )}
+            </div>
+            <Card className={cn(
+              'max-w-[85%]',
+              message.role === 'user'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/50'
+            )}>
+              <CardContent className="p-3 whitespace-pre-wrap text-sm">
                 {message.content}
               </CardContent>
             </Card>
-            {message.role === 'user' && (
-              <div className="rounded-full bg-muted p-2 h-8 w-8 flex-shrink-0">
-                <User className="h-4 w-4" />
-              </div>
-            )}
           </div>
         ))}
 
         {loading && (
-          <div className="flex gap-3 justify-start">
-            <div className="rounded-full bg-primary/10 p-2 h-8 w-8 flex-shrink-0">
+          <div className="flex gap-2 items-start">
+            <div className="rounded-full bg-primary/10 p-2 h-8 w-8 flex-shrink-0 flex items-center justify-center">
               <Bot className="h-4 w-4 text-primary" />
             </div>
-            <Card>
+            <Card className="bg-muted/50">
               <CardContent className="p-3 flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-muted-foreground">Pensando...</span>
+                <span className="text-muted-foreground text-sm">Pensando...</span>
               </CardContent>
             </Card>
           </div>
@@ -213,21 +216,37 @@ export function CreateSprint() {
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">{planPreview.name}</span>
                 </div>
-                <p className="text-sm text-muted-foreground mb-2">
+                <p className="text-sm text-muted-foreground mb-3">
                   {planPreview.totalDays} dias de estudo
                 </p>
-                <div className="space-y-1">
-                  {planPreview.days.slice(0, 4).map((day) => (
-                    <div key={day.dayNumber} className="text-xs text-muted-foreground">
-                      Dia {day.dayNumber}: {day.title}
+                <div className="space-y-1.5">
+                  {(showAllDays ? planPreview.days : planPreview.days.slice(0, 4)).map((day) => (
+                    <div key={day.dayNumber} className="text-sm text-muted-foreground flex gap-2">
+                      <span className="text-primary font-medium w-12 flex-shrink-0">Dia {day.dayNumber}</span>
+                      <span>{day.title}</span>
                     </div>
                   ))}
-                  {planPreview.days.length > 4 && (
-                    <div className="text-xs text-muted-foreground">
-                      ... e mais {planPreview.days.length - 4} dias
-                    </div>
-                  )}
                 </div>
+                {planPreview.days.length > 4 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full mt-2 text-xs"
+                    onClick={() => setShowAllDays(!showAllDays)}
+                  >
+                    {showAllDays ? (
+                      <>
+                        <ChevronUp className="h-3 w-3 mr-1" />
+                        Ver menos
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-3 w-3 mr-1" />
+                        Ver todos os {planPreview.days.length} dias
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
 
               <Button

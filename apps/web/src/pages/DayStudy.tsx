@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, ExternalLink, BookOpen, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Check, ExternalLink, BookOpen, Link as LinkIcon, Play } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
+import { YouTubeVideoCard } from '@/components/YouTubeVideoCard';
 import { daysApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import type { SprintDayWithStatus, SprintTask } from '@studysprint/shared';
+import type { SprintDayWithStatus, SprintTask, EnhancedResource } from '@studysprint/shared';
 
 export function DayStudy() {
   const { id, dayNumber } = useParams<{ id: string; dayNumber: string }>();
@@ -89,6 +90,32 @@ export function DayStudy() {
   const totalMinutes = tasks.reduce((sum, t) => sum + t.minutes, 0);
   const completedMinutes = tasks.filter(t => t.done).reduce((sum, t) => sum + t.minutes, 0);
 
+  // Separate resources by type (handle both old and new format)
+  const { youtubeVideos, linkResources } = useMemo(() => {
+    const resources = (day?.resources || []) as Array<EnhancedResource | { title: string; url: string }>;
+    const youtubeVideos: EnhancedResource[] = [];
+    const linkResources: EnhancedResource[] = [];
+
+    for (const resource of resources) {
+      const res = resource as EnhancedResource;
+      // Handle enhanced resource format
+      if (res.type === 'youtube' && res.youtube) {
+        youtubeVideos.push(res);
+      } else if (res.type === 'link') {
+        linkResources.push(res);
+      } else {
+        // Handle old format (just title + url) as link
+        linkResources.push({
+          type: 'link',
+          title: resource.title,
+          url: resource.url,
+        });
+      }
+    }
+
+    return { youtubeVideos, linkResources };
+  }, [day?.resources]);
+
   if (loading || !day) {
     return (
       <div className="space-y-6">
@@ -162,8 +189,29 @@ export function DayStudy() {
         </CardContent>
       </Card>
 
-      {/* Resources */}
-      {day.resources && day.resources.length > 0 && (
+      {/* YouTube Videos */}
+      {youtubeVideos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Play className="h-5 w-5" />
+              Videos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {youtubeVideos.map((resource, index) => (
+                resource.youtube && (
+                  <YouTubeVideoCard key={index} video={resource.youtube} />
+                )
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Link Resources */}
+      {linkResources.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -172,7 +220,7 @@ export function DayStudy() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {day.resources.map((resource, index) => (
+            {linkResources.map((resource, index) => (
               <a
                 key={index}
                 href={resource.url}

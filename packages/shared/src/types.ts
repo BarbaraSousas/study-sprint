@@ -163,3 +163,29 @@ export interface QuizResult {
   correct: number[];
   incorrect: number[];
 }
+
+// ============================================
+// YouTube/Video Types
+// ============================================
+
+export interface YouTubeVideo {
+  videoId: string;
+  title: string;
+  channel: string;
+  thumbnail: string;
+  duration: string;
+  durationSeconds: number;
+  views: string;
+}
+
+export interface EnhancedResource {
+  type: 'link' | 'youtube';
+  title: string;
+  url: string;
+  youtube?: YouTubeVideo;
+}
+
+export interface VideoSearchTerm {
+  query: string;
+  maxResults?: number;
+}

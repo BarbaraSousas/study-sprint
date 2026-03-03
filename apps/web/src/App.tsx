@@ -20,7 +20,7 @@ function App() {
     <div className="min-h-screen bg-background">
       {/* Navigation - Desktop */}
       <nav className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b hidden md:block">
-        <div className="container flex h-14 px-8 items-center">
+        <div className="max-w-4xl mx-auto flex h-14 px-6 items-center">
           <div className="mr-8 flex items-center space-x-2">
             <span className="text-xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
               StudySprint
@@ -79,7 +79,7 @@ function App() {
       </header>
 
       {/* Main content */}
-      <main className="container py-6 px-4 md:px-8 pb-24 md:pb-6">
+      <main className="max-w-4xl mx-auto py-6 px-4 md:px-6 pb-24 md:pb-6">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/sprint/:id" element={<SprintView />} />
